@@ -12,7 +12,7 @@ ENV KERNEL_SOURCE_URL=https://developer.nvidia.com/embedded/l4t/r32_release_v7.1
 
 RUN     mkdir -p "$BUILD_ROOT" "$TEGRA_KERNEL_OUT" && \
         apt-get update && \
-        apt-get install -y qemu-user-static git-core curl build-essential bc xxd
+        apt-get install -y qemu-user-static git-core curl build-essential bc xxd kmod
 
 WORKDIR /build
 
@@ -40,8 +40,13 @@ RUN make O=$TEGRA_KERNEL_OUT tegra_defconfig && \
         scripts/kconfig/merge_config.sh -n -O $TEGRA_KERNEL_OUT $TEGRA_KERNEL_OUT/.config $TEGRA_KERNEL_OUT/ipheth.config
 
 RUN make O=$TEGRA_KERNEL_OUT -j2 && \
+        make ARCH=arm64 O=$TEGRA_KERNEL_OUT modules_install INSTALL_MOD_PATH=$TEGRA_KERNEL_OUT/arch/$ARCH/modules && \
         echo "New kernel in $TEGRA_KERNEL_OUT/arch/$ARCH/boot/"
 
-WORKDIR $TEGRA_KERNEL_OUT/arch/$ARCH/boot/
+WORKDIR $TEGRA_KERNEL_OUT/arch/$ARCH/modules
+
+RUN tar --owner root --group root -cjf kernel_supplements.tbz2 lib/modules
+
+WORKDIR $TEGRA_KERNEL_OUT/arch/$ARCH/boot
 
 CMD /bin/bash
