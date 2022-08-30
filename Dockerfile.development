@@ -1,0 +1,56 @@
+FROM ubuntu:18.04
+
+ENV KERNEL_SOURCE_URL=https://developer.nvidia.com/embedded/l4t/r32_release_v7.1/sources/t210/public_sources.tbz2 \
+        L4T_RELEASE_URL=https://developer.nvidia.com/embedded/l4t/r32_release_v7.1/t210/jetson-210_linux_r32.7.1_aarch64.tbz2 \
+        SAMPLE_FS_URL=https://developer.nvidia.com/embedded/l4t/r32_release_v7.1/t210/tegra_linux_sample-root-filesystem_r32.7.1_aarch64.tbz2 \
+        L4T_TOOLCHAIN_URL=http://releases.linaro.org/components/toolchain/binaries/7.3-2018.05/aarch64-linux-gnu/gcc-linaro-7.3.1-2018.05-x86_64_aarch64-linux-gnu.tar.xz \
+        BOARD=jetson-nano-devkit \
+        L4T_RELEASE_PACKAGE=jetson-210_linux_r32.7.1_aarch64.tbz2 \
+        SAMPLE_FS_PACKAGE=tegra_linux_sample-root-filesystem_r32.7.1_aarch64.tbz2 \
+        BUILD_ROOT=/build \
+        TEGRA_KERNEL_OUT=/build/output
+
+RUN     mkdir -p "$BUILD_ROOT" "$TEGRA_KERNEL_OUT" && \
+        apt-get update && \
+        apt-get install -y qemu-user-static git-core curl build-essential bc xxd kmod
+
+WORKDIR /build
+
+RUN     curl -qsLO "$L4T_RELEASE_URL" && \
+        curl -qsLO "$SAMPLE_FS_URL" && \
+        tar xf "$L4T_RELEASE_PACKAGE" && \
+        tar xpf "$SAMPLE_FS_PACKAGE" -C Linux_for_Tegra/rootfs
+
+RUN     curl -qsLO "$KERNEL_SOURCE_URL" && \
+        curl -qsLO "$L4T_TOOLCHAIN_URL" && \
+        tar -xjf public_sources.tbz2 && \
+        tar -xjf Linux_for_Tegra/source/public/kernel_src.tbz2 -C Linux_for_Tegra/source/public && \
+        mkdir l4t-gcc && \
+        tar -xf gcc-linaro-7.3.1-2018.05-x86_64_aarch64-linux-gnu.tar.xz -C l4t-gcc
+
+ENV CROSS_COMPILE=$BUILD_ROOT/l4t-gcc/gcc-linaro-7.3.1-2018.05-x86_64_aarch64-linux-gnu/bin/aarch64-linux-gnu- \
+        LOCALVERSION=-tegra \
+        TEGRA_KERNEL_ROOT=$BUILD_ROOT/Linux_for_Tegra/source/public/kernel/kernel-4.9
+
+WORKDIR $TEGRA_KERNEL_ROOT
+
+COPY ipheth.config $TEGRA_KERNEL_OUT/ipheth.config
+
+RUN curl -sq https://github.com/torvalds/linux/commit/63e4b45c82ed1bde979da7052229a4229ce9cabf.patch | git apply
+
+ENV ARCH=arm64
+
+#RUN make O=$TEGRA_KERNEL_OUT tegra_defconfig && \
+#        scripts/kconfig/merge_config.sh -n -O $TEGRA_KERNEL_OUT $TEGRA_KERNEL_OUT/.config $TEGRA_KERNEL_OUT/ipheth.config
+#
+#RUN make O=$TEGRA_KERNEL_OUT -j2 && \
+#        make ARCH=arm64 O=$TEGRA_KERNEL_OUT modules_install INSTALL_MOD_PATH=$TEGRA_KERNEL_OUT/arch/$ARCH/modules && \
+#        echo "New kernel in $TEGRA_KERNEL_OUT/arch/$ARCH/boot/"
+#
+#WORKDIR $TEGRA_KERNEL_OUT/arch/$ARCH/modules
+#
+#RUN tar --owner root --group root -cjf kernel_supplements.tbz2 lib/modules
+#
+#WORKDIR $TEGRA_KERNEL_OUT/arch/$ARCH/boot
+
+CMD /bin/bash
